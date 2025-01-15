@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Test</h1>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+        // Connect to the server
+        const socket = io('http://127.0.0.1:5001'); 
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server');
+        });
+
+        // Listen for "message" event and display it on the page
+        socket.on('message', (data) => {
+        console.log('Message from server:', data);
+
+        // Dynamically add the message to the page
+        const messageElement = document.createElement('p');
+        messageElement.textContent = `Message from server: ${data.data}`;
+        document.body.appendChild(messageElement);
+    });
+    </script>
+</body>
+</html> 
