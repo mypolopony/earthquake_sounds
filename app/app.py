@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "z!bB3!UL!"  # Replace with a secure key for production
+app.config["SECRET_KEY"] = ".Tmg^T+I5y#x"  # Replace with a secure key for production
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
