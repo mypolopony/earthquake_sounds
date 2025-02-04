@@ -19,7 +19,7 @@
 
         // Listen for "message" event and display it on the page
         socket.on('api_data', (data) => {
-            console.log('Message from servder:', data);
+            console.log('Message from server:', data);
 
             // Modify the div with id "data2"
             document.getElementById('data2').textContent = JSON.stringify(data, null, 2);
