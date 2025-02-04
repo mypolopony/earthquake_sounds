@@ -1,6 +1,6 @@
 import logging
-import threading
 
+import eventlet
 import requests
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -53,7 +53,7 @@ def poll_api_and_emit():
 
         if active_clients <= 1:  # 1 means only the server itself is in the room
             print("🚫 No active clients, skipping API request.")
-            socketio.sleep(5)
+            eventlet.sleep(5)
             continue
 
         try:
@@ -66,18 +66,13 @@ def poll_api_and_emit():
                 print(f"API responded with status code {response.status_code}")
         except Exception as e:
             print(f"Error polling API: {e}")
-        socketio.sleep(5)  # Poll every 5 seconds
+        eventlet.sleep(5)  # Poll every 5 seconds
 
 
 # Start the server
 if __name__ == "__main__":
     # Run API polling in a separate thread
-    if not any(t.name == "API_Polling_Thread" for t in threading.enumerate()):
-        polling_thread = threading.Thread(
-            target=poll_api_and_emit, daemon=True, name="API_Polling_Thread"
-        )
-        polling_thread.start()
-        print("Started API polling thread.")
+    eventlet.spawn(poll_api_and_emit)
 
     # Start Flask-SocketIO server
-    socketio.run(app, host="0.0.0.0", port=5001, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5001, debug=True, use_reloader=False)

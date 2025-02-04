@@ -34,5 +34,5 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Expose the application port
 EXPOSE 5001
 
-# Start the app
-CMD ["python", "app.py"]
+# Start the app using Gunicorn with Eventlet
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "-b", "0.0.0.0:5001", "app:app"]
