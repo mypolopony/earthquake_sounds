@@ -1,5 +1,5 @@
 import logging
-import time
+import threading
 
 import requests
 from flask import Flask, render_template
@@ -21,16 +21,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=
 def handle_connect():
     print("Client connected")
     socketio.emit("message", {"data": "Welcome!"})
+    print(f"Active clients: {socketio.server.manager.get_participants('/', '/')}")
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
     print("Client disconnected")
-
-
-@socketio.on("custom_event")
-def handle_custom_event(data):
-    socketio.emit("response", {"data": "Acknowledged"})
+    print(f"Remaining clients: {socketio.server.manager.get_participants('/', '/')}")
 
 
 @app.route("/")
@@ -44,21 +41,43 @@ def websocket():
 
 
 def poll_api_and_emit():
+    """
+    Make sure the API is only polled when there are active WebSocket clients.
+    """
     while True:
+        # Check if any clients are connected
+        rooms = socketio.server.manager.rooms  # Get all active rooms
+        active_clients = len(
+            rooms.get("/", {})
+        )  # Default to empty if "/" doesn't exist
+
+        if active_clients <= 1:  # 1 means only the server itself is in the room
+            print("🚫 No active clients, skipping API request.")
+            socketio.sleep(5)
+            continue
+
         try:
             response = requests.get("https://jsonplaceholder.typicode.com/todos/1")
             if response.status_code == 200:
                 data = response.json()
                 print("Fetched data from API:", data)
-                socketio.emit("api_data", data)  # Emit data to WebSocket server
+                socketio.emit("api_data", data)  # Emit data to connected clients
             else:
                 print(f"API responded with status code {response.status_code}")
         except Exception as e:
             print(f"Error polling API: {e}")
-        time.sleep(5)  # Poll every 5 seconds
+        socketio.sleep(5)  # Poll every 5 seconds
 
 
 # Start the server
 if __name__ == "__main__":
+    # Run API polling in a separate thread
+    if not any(t.name == "API_Polling_Thread" for t in threading.enumerate()):
+        polling_thread = threading.Thread(
+            target=poll_api_and_emit, daemon=True, name="API_Polling_Thread"
+        )
+        polling_thread.start()
+        print("Started API polling thread.")
+
+    # Start Flask-SocketIO server
     socketio.run(app, host="0.0.0.0", port=5001, debug=True)
-    poll_api_and_emit()
