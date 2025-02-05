@@ -78,16 +78,16 @@ def poll_api_and_emit():
                         int(quake["time"] / 1000)
                     ).strftime("%Y-%m-%d %H:%M:%S")
                     quakelist.append(
-                        f"- {quake['place']} (Mag: {quake['magnitude']}) at {timestamp}"
+                        f"{quake['place']} (Mag: {quake['magnitude']}) at {timestamp}"
                     )
-                socketio.emit("api_data", "\n".join(quakelist))
+                socketio.emit("api_data", quakelist)
 
         except InvalidAPIResponse as e:
             socketio.emit("message", f"Error parsing API response: {e}")
         except Exception as e:
             socketio.emit("message", f"An unexpected error occurred: {e}")
 
-        eventlet.sleep(60)  # Poll every 60 seconds
+        eventlet.sleep(10)  # Wait before the next poll
 
 
 # Start the server
