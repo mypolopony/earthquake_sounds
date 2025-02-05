@@ -17,7 +17,12 @@
             console.log('Connected to WebSocket server');
         });
 
-        // Listen for "message" event and display it on the page
+        // Generic "message" event
+        socket.on('message', (data) => {
+            console.log('Message from server:', data);
+        });
+
+        // Listen for "api_data" event and display it on the page
         socket.on('api_data', (data) => {
             console.log('Message from server:', data);
 
@@ -34,8 +39,8 @@
         });
 
     </script>
-    <h2>Here is a div2</h2>
-    <div id="data2">Waiting for updates...</div>
+    <h2>Recent Earthquakes</h2>
+    <div id="data2"></div>
 </body>
 
 </html>

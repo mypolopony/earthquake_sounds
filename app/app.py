@@ -1,9 +1,11 @@
 import logging
+from datetime import datetime
 
 import eventlet
-import requests
 from flask import Flask, render_template
 from flask_socketio import SocketIO
+
+from api import InvalidAPIResponse, USGSEarthquakeAPI
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -44,29 +46,48 @@ def poll_api_and_emit():
     """
     Make sure the API is only polled when there are active WebSocket clients.
     """
+    # API client
+    api_client = USGSEarthquakeAPI()
+    params = {
+        "limit": 20,
+        "minmagnitude": 2,
+    }
+
     while True:
         # Check if any clients are connected
         rooms = socketio.server.manager.rooms  # Get all active rooms
-        active_clients = len(
-            rooms.get("/", {})
-        )  # Default to empty if "/" doesn't exist
+        active_clients = len(rooms.get("/", {}))
 
-        if active_clients <= 1:  # 1 means only the server itself is in the room
-            print("🚫 No active clients, skipping API request.")
+        # No active clients, skip API request
+        if active_clients <= 1:
             eventlet.sleep(5)
             continue
 
         try:
-            response = requests.get("https://jsonplaceholder.typicode.com/todos/1")
-            if response.status_code == 200:
-                data = response.json()
-                print("Fetched data from API:", data)
-                socketio.emit("api_data", data)  # Emit data to connected clients
-            else:
-                print(f"API responded with status code {response.status_code}")
+            # Fetch
+            data = api_client.fetch_earthquakes(params)
+
+            # Parse
+            earthquakes = api_client.parse_earthquake_data(data)
+
+            # Display
+            if earthquakes:
+                quakelist = []
+                for quake in earthquakes:
+                    timestamp = datetime.fromtimestamp(
+                        int(quake["time"] / 1000)
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                    quakelist.append(
+                        f"- {quake['place']} (Mag: {quake['magnitude']}) at {timestamp}"
+                    )
+                socketio.emit("api_data", "\n".join(quakelist))
+
+        except InvalidAPIResponse as e:
+            socketio.emit("message", f"Error parsing API response: {e}")
         except Exception as e:
-            print(f"Error polling API: {e}")
-        eventlet.sleep(5)  # Poll every 5 seconds
+            socketio.emit("message", f"An unexpected error occurred: {e}")
+
+        eventlet.sleep(60)  # Poll every 60 seconds
 
 
 # Start the server
