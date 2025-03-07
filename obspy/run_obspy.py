@@ -1,13 +1,47 @@
 import os
 import time
+from dataclasses import dataclass
 
 from obspy.clients.fdsn import Client
 from obspy.core.event import Event
-from obspy import UTCDateTime, Stream
+from obspy.core.stream import Stream
+from obspy import UTCDateTime
 from obspy.geodetics import gps2dist_azimuth
 from scipy.io.wavfile import write
 from obspy.clients.fdsn.header import FDSNException
 import numpy as np
+
+
+@dataclass
+class Earthquake:
+    """
+    A class to represent an earthquake event.
+
+    Attributes
+    ----------
+    time : obspy.UTCDateTime
+        The time of the earthquake.
+    latitude : float
+        The latitude of the earthquake's epicenter.
+    longitude : float
+        The longitude of the earthquake's epicenter.
+    magnitude : float
+        The magnitude of the earthquake.
+    """
+
+    def __init__(
+        self,
+        id: str,
+        time: UTCDateTime,
+        latitude: float,
+        longitude: float,
+        magnitude: float,
+    ):
+        self.id = id
+        self.time = time
+        self.latitude = latitude
+        self.longitude = longitude
+        self.magnitude = magnitude
 
 
 class EarthquakeMonitor:
@@ -39,7 +73,7 @@ class EarthquakeMonitor:
         self.client = Client(fdsn_client)
         self.base_dir = base_dir
         os.makedirs(self.base_dir, exist_ok=True)
-        self.queried_stations = {}
+        self.captured_stations = {}
 
     def poll_earthquakes(
         self, min_magnitude=1.0, poll_interval=60, lookback_interval=1000
@@ -69,6 +103,10 @@ class EarthquakeMonitor:
 
                 for event in events:
                     self.process_earthquake(event)
+
+                print(
+                    f"Events: {[event.resource_id.id.split('=')[-1] for event in events]}"
+                )
             except FDSNException:
                 print(f"[{now}] No events found")
                 pass
@@ -84,31 +122,36 @@ class EarthquakeMonitor:
         event: obspy.core.event.Event
             The earthquake event to process.
         """
-        # Event details
         origin = event.preferred_origin()
-        event_id = event.resource_id.id.split("=")[-1]
-        magnitude = event.preferred_magnitude().mag
+
+        # Extract event details
+        quake = Earthquake(
+            id=event.resource_id.id.split("=")[-1],
+            time=origin.time,
+            latitude=origin.latitude,
+            longitude=origin.longitude,
+            magnitude=event.preferred_magnitude().mag,
+        )
 
         print(
-            f"[{UTCDateTime.now()}] New earthquake detected: {origin.time}, "
-            f"Location: ({origin.latitude}, {origin.longitude}), Magnitude: {magnitude}"
+            f"[{UTCDateTime.now()}] New earthquake detected ({quake.id}): {quake.time}, "
+            f"Location: ({quake.latitude}, {quake.longitude}), Magnitude: {quake.magnitude}"
         )
 
         # Create directory for the event
-        event_dir = os.path.join(self.base_dir, f"{event_id}_{magnitude}")
+        event_dir = os.path.join(self.base_dir, f"{quake.id}_{quake.magnitude}")
         os.makedirs(event_dir, exist_ok=True)
 
         # Track queried stations by event ID
-        if event_id not in self.queried_stations:
-            self.queried_stations[event_id] = set()
+        if quake.id not in self.captured_stations:
+            self.captured_stations[quake.id] = set()
 
         # Poll waveforms
-        self.poll_waveforms(origin, event_id, event_dir)
+        self.poll_waveforms(quake, event_dir)
 
     def poll_waveforms(
         self,
-        origin: Event.origin.Origin,
-        event_id: str,
+        quake: Earthquake,
         event_dir: str,
         max_radius: float = 1.8,
         avg_p_speed: float = 6.0,
@@ -119,10 +162,8 @@ class EarthquakeMonitor:
 
         Params
         ------
-        origin: obspy.core.event.Event.origin.Origin
-            The earthquake origin.
-        event_id: str
-            The earthquake event ID.
+        quake: Earthquake
+            The earthquake to process.
         event_dir: str
             Directory to save waveform data.
         max_radius: float
@@ -135,11 +176,11 @@ class EarthquakeMonitor:
         # Query nearby stations and networks
         try:
             stations = self.client.get_stations(
-                latitude=origin.latitude,
-                longitude=origin.longitude,
+                latitude=quake.latitude,
+                longitude=quake.longitude,
                 maxradius=max_radius,
-                starttime=origin.time,
-                endtime=origin.time + 3600,
+                starttime=quake.time,
+                endtime=quake.time + 3600,
                 level="channel",
             )
         except TimeoutError:
@@ -150,33 +191,34 @@ class EarthquakeMonitor:
         for network in stations:
             for station in network:
                 station_id = f"{network.code}.{station.code}"
-                if station_id not in self.queried_stations[event_id]:
+                if station_id not in self.captured_stations[quake.id]:
                     # Distance to station
                     dist_m, _, _ = gps2dist_azimuth(
-                        origin.latitude,
-                        origin.longitude,
+                        quake.latitude,
+                        quake.longitude,
                         station.latitude,
                         station.longitude,
                     )
                     dist_km = dist_m / 1000.0
 
                     # Calculate P and S wave arrival times
-                    p_arrival = origin.time + (dist_km / avg_p_speed)
-                    s_arrival = origin.time + (dist_km / avg_s_speed)
+                    p_arrival = quake.time + (dist_km / avg_p_speed)
+                    s_arrival = quake.time + (dist_km / avg_s_speed)
 
                     # Define time window for waveform data
                     start_time = p_arrival - 180
                     end_time = s_arrival + 240
 
                     # Announce
-                    print(
-                        f"[{UTCDateTime.now()}] Station: {station_id}, Distance: {dist_km:.2f} km, "
-                        f"P arrival: {p_arrival}, S arrival: {s_arrival}"
-                    )
+                    # print(
+                    #    f"[{UTCDateTime.now()}] Station: {station_id}, Distance: {dist_km:.2f} km, "
+                    #    f"P arrival: {p_arrival}, S arrival: {s_arrival}"
+                    # )
 
                     # Save waveform data
                     filename_prefix = f"{dist_km:.2f}_{station_id}"
                     self.save_waveform(
+                        quake.id,
                         network.code,
                         station.code,
                         "*",
@@ -187,32 +229,41 @@ class EarthquakeMonitor:
                         filename_prefix,
                     )
 
-                    # Mark this station as queried for this event
-                    self.queried_stations[event_id].add(station_id)
-
     def save_waveform(
         self,
-        network,
-        station,
-        location,
-        channel,
-        starttime,
-        endtime,
-        event_dir,
-        filename_prefix,
+        quake_id: str,
+        network: str,
+        station: str,
+        location: str,
+        channel: str,
+        starttime: UTCDateTime,
+        endtime: UTCDateTime,
+        event_dir: str,
+        filename_prefix: str,
     ):
         """
         Save waveform data as MiniSEED, WAV, and PNG files.
 
-        Args:
-            network (str): Network code.
-            station (str): Station code.
-            location (str): Location code.
-            channel (str): Channel code.
-            starttime (obspy.UTCDateTime): Start time for waveform data.
-            endtime (obspy.UTCDateTime): End time for waveform data.
-            event_dir (str): Directory to save files.
-            filename_prefix (str): Filename prefix for the saved files.
+        Params
+        ------
+        quake_id: str
+            The earthquake ID.
+        network: str
+            Network code.
+        station: str
+            Station code.
+        location: str
+            Location code.
+        channel: str
+            Channel code.
+        starttime: obspy.UTCDateTime
+            Start time for the waveform data.
+        endtime: obspy.UTCDateTime
+            End time for the waveform data.
+        event_dir: str
+            Directory to save the waveform data.
+        filename_prefix: str
+            Prefix for filenames.
         """
         try:
             # Fetch waveform data
@@ -240,12 +291,17 @@ class EarthquakeMonitor:
             waveform.plot(outfile=png_path)
             print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
 
+            # Mark this station as queried for this event
+            self.captured_stations[quake_id].add(f"{network}.{station}")
+
         except Exception as e:
-            print(
-                f"[{UTCDateTime.now()}] Error saving waveform for {network}.{station}: {e}"
-            )
+            if "204" in str(e):
+                pass
+            else:
+                print(f"An unexpected error occurred: {e}")
 
     def convert_to_wav(
+        self,
         stream: Stream,
         wav_path: str,
         amplitude_scaling: float = 0.9,
@@ -256,7 +312,7 @@ class EarthquakeMonitor:
 
         Params
         ------
-        stream: obspy.Stream
+        stream: from obspy.core.stream
             The ObsPy stream to convert.
         wav_path: str
             The path to save the WAV file.
@@ -266,12 +322,19 @@ class EarthquakeMonitor:
             Playback speed multiplier.
         """
         try:
+            # Grab first trace
             trace = stream[0]
             data = trace.data.astype(np.float32)
+
+            # Normalize and scale
             data /= np.max(np.abs(data))
             data *= amplitude_scaling
+
+            # Convert to PCM and save as WAV
             sampling_rate = int(trace.stats.sampling_rate * playback_speed)
             data_pcm = (data * 32767).astype(np.int16)
+
+            # Write to WAV file
             write(wav_path, sampling_rate, data_pcm)
         except Exception as e:
             print(f"Error converting to WAV: {e}")
