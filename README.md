@@ -1,6 +1,6 @@
 # Earthquake Sounds
 
-![Project Banner](https://github.com/mypolopony/earthquake_sounds/raw/develop/banner.png)
+![Project Banner](https://github.com/mypolopony/earthquake_sounds/blob/develop/img/huddled.png)
 
 ## Overview
 Earthquake Sounds is a Python package that listens to earthquakes in real-time and reports on them via a front-end interface. It continuously fetches seismic data, processes it, and provides real-time visual and audio feedback on detected seismic activity.
