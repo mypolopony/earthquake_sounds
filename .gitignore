@@ -2,7 +2,9 @@
 poetry.lock
 
 # MacOS
-.DS_Store
+*DS_Store*
+#Terraform
+*.tfstate*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
