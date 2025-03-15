@@ -3,8 +3,7 @@ poetry.lock
 
 # MacOS
 *DS_Store*
-
-# Terraform
+#Terraform
 *.tfstate*
 
 # Byte-compiled / optimized / DLL files

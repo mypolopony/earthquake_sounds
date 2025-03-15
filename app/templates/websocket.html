@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthsounds</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+
+<body>
+    <h2>Recent Earthquakes</h2>
+    <ul id="usgs_earthquakes"></ul>
+
+    <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
+</body>
+
+</html>
