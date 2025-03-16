@@ -1,6 +1,6 @@
 # Earthquake Sounds
 
-![Project Banner](https://github.com/mypolopony/earthquake_sounds/blob/develop/img/huddled.png)
+![Project Banner](https://github.com/mypolopony/earthquake_sounds/raw/develop/banner.png)
 
 ## Overview
 Earthquake Sounds is a Python package that listens to earthquakes in real-time and reports on them via a front-end interface. It continuously fetches seismic data, processes it, and provides real-time visual and audio feedback on detected seismic activity.
@@ -14,6 +14,7 @@ Earthquake Sounds is a Python package that listens to earthquakes in real-time a
 - Built using Python and `obspy` for robust seismic analysis.
 - Uses Terraform for cloud infrastructure automation.
 - Flask-based web interface for front-end visualization.
+- **ObsPy runs as a separate microservice**, continuously serving real-time seismic data for processing and visualization.
 
 ## Installation
 
@@ -38,25 +39,35 @@ Ensure you have the following installed:
    poetry run python app/main.py
    ```
 
+### Running ObsPy Microservice
+ObsPy must be run separately from the main application. To start the ObsPy microservice:
+```sh
+cd obspy
+poetry run python run_obspy.py
+```
+This will launch the service responsible for handling and streaming real-time seismic data.
+
 ### Using Docker
-1. Build and start the Docker container:
+1. Build and start the application container:
    ```sh
    docker-compose up --build
    ```
 2. The service should now be running and accessible.
+3. Since ObsPy runs separately, it must be started manually (or added to a separate container configuration).
 
 ### Deploying with Terraform
 There are two types of Snowflake deployments and each has its own Terraform configuration. Navigate to
 
 `obspy/tf/kafka` for the Kafka, swift messaging version  
 or  
-`obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time.  
+`obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time. 
 
 ## Usage
 After running the application, the system will listen to real-time seismic data and generate corresponding reports on the front end. Users can:
 - View earthquake data updates in real-time.
 - Listen to seismic waveforms converted into audio.
 - Access the Flask-based web interface for earthquake reports and visualization.
+- **Receive real-time seismic data streamed from the separately running ObsPy microservice**.
 - Adjust parameters in `config.yaml` to modify data sources and output preferences.
 
 ## Project Structure
@@ -66,14 +77,11 @@ After running the application, the system will listen to real-time seismic data 
 │   ├── sound.py     # Converts seismic data into sound
 │   ├── visualize.py # Generates waveform and spectrograms
 │   ├── frontend/    # Flask-based web interface for real-time reporting
-├── obspy/           # Helper scripts for handling seismic data
+├── obspy/           # ObsPy microservice for real-time seismic data
+│   ├── run_obspy.py # Script to start the ObsPy microservice
 ├── terraform/       # Terraform configuration for cloud deployment
 ├── docker-compose.yml # Docker configuration
 ├── requirements.txt # Required dependencies
 └── README.md        # Project documentation
 ```
-
-## Output
-
--> ECS, Kafka, Snowflake, Lambda, MLFlow, etc
 
