@@ -46,23 +46,11 @@ Ensure you have the following installed:
 2. The service should now be running and accessible.
 
 ### Deploying with Terraform
-1. Navigate to the `terraform/` directory:
-   ```sh
-   cd terraform
-   ```
-2. Initialize Terraform:
-   ```sh
-   terraform init
-   ```
-3. Plan the deployment:
-   ```sh
-   terraform plan
-   ```
-4. Apply the Terraform configuration:
-   ```sh
-   terraform apply
-   ```
-5. The application should now be deployed on the cloud infrastructure.
+There are two types of Snowflake deployments and each has its own Terraform configuration. Navigate to
+
+`obspy/tf/kafka` for the Kafka, swift messaging version
+or
+`obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time.
 
 ## Usage
 After running the application, the system will listen to real-time seismic data and generate corresponding reports on the front end. Users can:
@@ -85,4 +73,7 @@ After running the application, the system will listen to real-time seismic data 
 └── README.md        # Project documentation
 ```
 
+## Output
+
+-> ECS, Kafka, Snowflake, Lambda, MLFlow, etc
 
