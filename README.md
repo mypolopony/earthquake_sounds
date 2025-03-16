@@ -49,7 +49,7 @@ Ensure you have the following installed:
 There are two types of Snowflake deployments and each has its own Terraform configuration. Navigate to
 
 `obspy/tf/kafka` for the Kafka, swift messaging version  
-or
+or  
 `obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time.  
 
 ## Usage
