@@ -48,9 +48,9 @@ Ensure you have the following installed:
 ### Deploying with Terraform
 There are two types of Snowflake deployments and each has its own Terraform configuration. Navigate to
 
-`obspy/tf/kafka` for the Kafka, swift messaging version
+`obspy/tf/kafka` for the Kafka, swift messaging version  
 or
-`obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time.
+`obs/tf/direct_put` for the jenky HTTPS PUT from 40 years ago that works 88% of the time, 99% of the time.  
 
 ## Usage
 After running the application, the system will listen to real-time seismic data and generate corresponding reports on the front end. Users can:
