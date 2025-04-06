@@ -76,3 +76,11 @@ After running the application, the system will listen to real-time seismic data 
 - ![11932886_2.0_image](img/16.15_PT.KHU.png)
 - [11932886_2.0_wav](img/16.15_PT.KHU.wav)
 
+11931570_4.0
+- ![11931570_4.0_image](img/94.78_AK.CHI.png)
+- [11931570_4.0_wav](img/94.78_AK.CHI.wav)
+
+11931522_1.75
+- ![11931522_1.75_image](img/39.98_IU.SJG.png)
+- [11931522_1.75_wav](img/39.98_IU.SJG.wav)
+
