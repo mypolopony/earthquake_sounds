@@ -73,6 +73,6 @@ After running the application, the system will listen to real-time seismic data 
 ## Example Earthquakes
 
 11932886_2.0
-[11932886_2.0_image](img/16.15_PT.KHU.png)
-[11932886_2.0_wav](img/16.15_PT.KHU.wav)
+- ![11932886_2.0_image](img/16.15_PT.KHU.png)
+- [11932886_2.0_wav](img/16.15_PT.KHU.wav)
 
