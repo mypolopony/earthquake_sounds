@@ -78,7 +78,7 @@ After running the application, the system will listen to real-time seismic data 
 │   ├── visualize.py # Generates waveform and spectrograms
 │   ├── frontend/    # Flask-based web interface for real-time reporting
 ├── obspy/           # ObsPy microservice for real-time seismic data
-│   ├── run_obspy.py # Script to start the ObsPy microservice
+│   ├── run_obspy.py # Script to start the ObssPy microservice
 ├── terraform/       # Terraform configuration for cloud deployment
 ├── docker-compose.yml # Docker configuration
 ├── requirements.txt # Required dependencies
