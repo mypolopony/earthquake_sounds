@@ -14,7 +14,7 @@ __pycache__/
 .ruff_cache
 
 # Data
-obspy/earthquakes/*
+obspy/earthquakes/
 # Good data examples
 !obspy/earthquakes/11931570_4.0
 !obspy/earthquakes/11931575_1.3
