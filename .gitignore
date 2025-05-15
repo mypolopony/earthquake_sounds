@@ -37,3 +37,7 @@ obspy/tf/direct_put/terraform.tfvars
 
 # Tests
 obspy/firehose_snowflake_test.py
+obspy/event.py
+
+# Notebooks
+obspy/explorer.ipynb
