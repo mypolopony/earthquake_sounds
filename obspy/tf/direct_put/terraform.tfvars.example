@@ -1,0 +1,16 @@
+snowflake_account                = ""
+snowflake_organization_name      = ""
+snowflake_admin_user             = ""
+snowflake_admin_role             = "ACCOUNTADMIN"
+snowflake_admin_private_key_path = "rsa_key.p8"
+
+firehose_user_private_key_path = "firehose_user_private_key.p8"
+firehose_user_public_key_path  = "firehose_user_public_key.pem"
+
+snowflake_firehose_role      = "FIREHOSE_ROLE"
+snowflake_firehose_user      = "FIREHOSE_USER"
+snowflake_firehose_warehouse = "COMPUTE_WH"
+
+database_name = "EARTHSOUNDS"
+schema_name   = "EARTHQUAKE"
+table_name    = "OBSPY"
