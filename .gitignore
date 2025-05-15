@@ -13,6 +13,9 @@ __pycache__/
 .mypy_cache
 .ruff_cache
 
+# VSCode
+.vscode/
+
 # Data
 obspy/earthquakes/
 # Good data examples
@@ -24,3 +27,12 @@ obspy/earthquakes/
 !obspy/earthquakes/11932359_2.29
 !obspy/earthquakes/11932392_2.32
 !obspy/earthquakes/11933551_2.76
+
+# Secrets
+obspy/tf/direct_put/terraform.tfvars
+
+# Terraform
+*.terraform/
+
+# Tests
+obspy/firehose_snowflake_test.py
