@@ -12,3 +12,15 @@ __pycache__/
 # Distribution / packaging
 .mypy_cache
 .ruff_cache
+
+# Data
+obspy/earthquakes/*
+# Good data examples
+!obspy/earthquakes/11931570_4.0
+!obspy/earthquakes/11931575_1.3
+!obspy/earthquakes/11931578_1.52
+!obspy/earthquakes/11931591_2.01
+!obspy/earthquakes/11932329_1.6
+!obspy/earthquakes/11932359_2.29
+!obspy/earthquakes/11932392_2.32
+!obspy/earthquakes/11933551_2.76
