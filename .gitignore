@@ -33,6 +33,7 @@ obspy/tf/direct_put/terraform.tfvars
 
 # Terraform
 *.terraform/
+*.terraform.lock.hcl
 
 # Tests
 obspy/firehose_snowflake_test.py
