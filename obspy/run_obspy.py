@@ -62,9 +62,7 @@ class EarthquakeMonitor:
         os.makedirs(self.base_dir, exist_ok=True)
         self.captured_stations = {}
 
-    def poll_earthquakes(
-        self, min_magnitude=1.0, poll_interval=60, lookback_interval=1000
-    ):
+    def poll_earthquakes(self, min_magnitude=1.0, poll_interval=60, lookback_interval=1000):
         """
         Continuously poll for new earthquakes and process them.
 
@@ -91,9 +89,7 @@ class EarthquakeMonitor:
                 for event in events:
                     self.process_earthquake(event)
 
-                print(
-                    f"Events: {[event.resource_id.id.split('=')[-1] for event in events]}"
-                )
+                print(f"Events: {[event.resource_id.id.split('=')[-1] for event in events]}")
             except FDSNException:
                 print(f"[{now}] No events found")
                 pass
@@ -466,16 +462,9 @@ class DebugEarthquakeMonitor(EarthquakeMonitor):
 # Run the EarthquakeMonitor
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Earthquake Monitor")
-    parser.add_argument(
-        "--debug", action="store_true", help="Run in debug mode with mock data"
-    )
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode with mock data")
     parser.add_argument("--poll-interval", type=int, help="Seconds between events")
-    parser.add_argument(
-        "--max-events",
-        default=10,
-        type=int,
-        help="Stop after N mock events (debug mode only)",
-    )
+    parser.add_argument("--max-events", default=10, type=int, help="Stop after N mock events (debug mode only)")
     args = parser.parse_args()
 
     if not args.debug and args.max_events is not None:
@@ -483,11 +472,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Apply default poll interval only if not provided explicitly
-    poll_interval = (
-        args.poll_interval
-        if args.poll_interval is not None
-        else (10 if args.debug else 60)
-    )
+    poll_interval = args.poll_interval if args.poll_interval is not None else (10 if args.debug else 60)
 
     if args.debug:
         monitor = DebugEarthquakeMonitor()
