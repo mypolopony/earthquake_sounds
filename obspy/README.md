@@ -41,7 +41,7 @@ The module is centered around two primary classes:
 The module supports runtime configuration via CLI flags:
 
 ```bash
-python run_obspy.py [--debug] [--poll-interval SECONDS] [--max-events N]
+python producer.py [--debug] [--poll-interval SECONDS] [--max-events N]
 ```
 
 * `--debug`: run in synthetic/mock mode.
@@ -81,3 +81,11 @@ Overrides:
 * Customize `poll_waveforms()` to handle other station/channel types.
 * Extend `generate_mock_waveform()` to simulate different seismic profiles.
 * Plug into a monitoring dashboard or pipeline with minimal effort.
+
+
+## Testing the ObsPy Producer
+(*NOTE:* This is a flat script during initial development.)
+```
+make build
+make run ARGS="--count 10 --debug"
+```
