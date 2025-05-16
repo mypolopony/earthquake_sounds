@@ -42,8 +42,7 @@ Ensure you have the following installed:
 ### Running ObsPy Microservice
 ObsPy must be run separately from the main application. To start the ObsPy microservice:
 ```sh
-cd obspy
-poetry run python run_obspy.py
+poetry run obspy/producer.py
 ```
 This will launch the service responsible for handling and streaming real-time seismic data.
 
