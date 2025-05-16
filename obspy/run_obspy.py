@@ -1,15 +1,18 @@
 import os
+import random
+import numpy as np
+import argparse
 import time
+import sys
 from dataclasses import dataclass
 
+from obspy import Trace, UTCDateTime
 from obspy.clients.fdsn import Client
-from obspy.core.event import Event
+from obspy.core.event import Event, Origin, Magnitude, ResourceIdentifier
 from obspy.core.stream import Stream
-from obspy import UTCDateTime
 from obspy.geodetics import gps2dist_azimuth
 from scipy.io.wavfile import write
 from obspy.clients.fdsn.header import FDSNException
-import numpy as np
 
 
 @dataclass
@@ -340,7 +343,164 @@ class EarthquakeMonitor:
             print(f"Error converting to WAV: {e}")
 
 
+class DebugEarthquakeMonitor(EarthquakeMonitor):
+    """
+    A subclass of EarthquakeMonitor for simulating mock earthquake events and waveforms.
+    Intended for development and testing without relying on real-time data.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the DebugEarthquakeMonitor.
+
+        Params
+        ------
+        *args, **kwargs: arguments passed to the base EarthquakeMonitor class.
+        """
+        super().__init__(*args, **kwargs)
+
+    def poll_earthquakes(self, poll_interval=10, max_events=None):
+        """
+        Simulate repeated mock earthquake events and process them every poll_interval seconds.
+
+        Params
+        ------
+        poll_interval: int
+            Time interval (in seconds) between mock events.
+        max_events: int or None
+            Maximum number of events to simulate; None for infinite.
+        """
+        count = 0
+        while True:
+            now = UTCDateTime.now()
+            mock_event = self.generate_mock_event(now)
+            self.process_earthquake(mock_event)
+            count += 1
+            if max_events is not None and count >= max_events:
+                break
+            time.sleep(poll_interval)
+
+    def generate_mock_event(self, event_time: UTCDateTime):
+        """
+        Generate a mock ObsPy Event object with randomized parameters.
+
+        Params
+        ------
+        event_time: obspy.UTCDateTime
+            Timestamp to assign to the event.
+
+        Returns
+        -------
+        obspy.core.event.Event
+            Mock event with random origin and magnitude.
+        """
+        event_id = f"{random.randint(1000, 9999)}"
+        lat = random.uniform(-90, 90)
+        lon = random.uniform(-180, 180)
+        mag = random.uniform(1.0, 2.0)
+
+        origin = Origin(time=event_time, latitude=lat, longitude=lon)
+        magnitude = Magnitude(mag=mag)
+
+        event = Event(
+            resource_id=ResourceIdentifier(f"debug/{event_id}"),
+            origins=[origin],
+            magnitudes=[magnitude],
+        )
+        event.preferred_origin_id = origin.resource_id
+        event.preferred_magnitude_id = magnitude.resource_id
+
+        return event
+
+    def poll_waveforms(self, quake: Earthquake, event_dir: str, **kwargs):
+        """
+        Simulate downloading waveform data for mock stations and save as MiniSEED.
+
+        Params
+        ------
+        quake: Earthquake
+            The simulated earthquake to process.
+        event_dir: str
+            Directory to save the simulated waveform data.
+        """
+        station_ids = ["XX.TEST", "YY.DEBUG"]
+        for sid in station_ids:
+            net, sta = sid.split(".")
+            filename_prefix = f"{sid}"
+            stream = self.generate_mock_waveform()
+
+            # Save the waveform data as MiniSEED
+            mseed_path = f"{event_dir}/{filename_prefix}.mseed"
+            stream.write(mseed_path, format="MSEED")
+            print(f"[{UTCDateTime.now()}] Saved mock MiniSEED: {mseed_path}")
+
+            # Convert to WAV
+            wav_path = os.path.join(event_dir, f"{filename_prefix}.wav")
+            self.convert_to_wav(stream, wav_path)
+            print(f"[{UTCDateTime.now()}] Saved WAV: {wav_path}")
+
+            # Plot and save PNG
+            png_path = os.path.join(event_dir, f"{filename_prefix}.png")
+            stream.plot(outfile=png_path)
+            print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
+
+    def generate_mock_waveform(self, npts=1000, sampling_rate=100):
+        """
+        Generate a synthetic waveform using a 5 Hz sine wave.
+
+        Params
+        ------
+        npts: int
+            Number of points in the waveform.
+        sampling_rate: int
+            Sampling rate in Hz.
+
+        Returns
+        -------
+        obspy.Stream
+            Stream containing a single synthetic Trace.
+        """
+        t = np.linspace(0, 1, npts)
+        data = np.sin(2 * np.pi * 5 * t)
+        trace = Trace(data=data)
+        trace.stats.station = "MOCK"
+        trace.stats.network = "XX"
+        trace.stats.sampling_rate = sampling_rate
+        trace.stats.starttime = UTCDateTime.now()
+        return Stream(traces=[trace])
+
+
 # Run the EarthquakeMonitor
 if __name__ == "__main__":
-    monitor = EarthquakeMonitor()
-    monitor.poll_earthquakes(min_magnitude=1.0, poll_interval=60)
+    parser = argparse.ArgumentParser(description="Earthquake Monitor")
+    parser.add_argument(
+        "--debug", action="store_true", help="Run in debug mode with mock data"
+    )
+    parser.add_argument("--poll-interval", type=int, help="Seconds between events")
+    parser.add_argument(
+        "--max-events",
+        default=10,
+        type=int,
+        help="Stop after N mock events (debug mode only)",
+    )
+    args = parser.parse_args()
+
+    if not args.debug and args.max_events is not None:
+        print("Error: --max-events can only be used with --debug")
+        sys.exit(1)
+
+    # Apply default poll interval only if not provided explicitly
+    poll_interval = (
+        args.poll_interval
+        if args.poll_interval is not None
+        else (10 if args.debug else 60)
+    )
+
+    if args.debug:
+        monitor = DebugEarthquakeMonitor()
+        # Use the provided max_events or default to 2
+        max_events = args.max_events if args.max_events is not None else 2
+        monitor.poll_earthquakes(poll_interval=poll_interval, max_events=max_events)
+    else:
+        monitor = EarthquakeMonitor()
+        monitor.poll_earthquakes(min_magnitude=1.0, poll_interval=poll_interval)
