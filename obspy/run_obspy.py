@@ -22,44 +22,28 @@ class Earthquake:
 
     Attributes
     ----------
+    id : str
+        The unique event identifier.
     time : obspy.UTCDateTime
         The time of the earthquake.
     latitude : float
-        The latitude of the earthquake's epicenter.
+        Latitude of the epicenter.
     longitude : float
-        The longitude of the earthquake's epicenter.
+        Longitude of the epicenter.
     magnitude : float
-        The magnitude of the earthquake.
+        Magnitude of the event.
     """
 
-    def __init__(
-        self,
-        id: str,
-        time: UTCDateTime,
-        latitude: float,
-        longitude: float,
-        magnitude: float,
-    ):
-        self.id = id
-        self.time = time
-        self.latitude = latitude
-        self.longitude = longitude
-        self.magnitude = magnitude
+    id: str
+    time: UTCDateTime
+    latitude: float
+    longitude: float
+    magnitude: float
 
 
 class EarthquakeMonitor:
     """
-    A class to monitor earthquakes, poll stations for waveform data,
-    and save the results as MiniSEED, WAV, and PNG files.
-
-    Attributes
-    ----------
-    client : obspy.clients.fdsn.Client
-        FDSN client for querying.
-    base_dir : str
-        Base directory for saving earthquake data.
-    queried_stations : dict
-        Dictionary to track queried stations by event ID.
+    A base class for monitoring earthquakes and saving waveform data.
     """
 
     def __init__(self, base_dir: str = "earthquakes", fdsn_client: str = "IRIS"):
@@ -232,6 +216,42 @@ class EarthquakeMonitor:
                         filename_prefix,
                     )
 
+    def save_all_formats(
+        self,
+        stream: Stream,
+        event_dir: str,
+        filename_prefix: str,
+        formats: list = ["MSEED", "WAV", "PNG"],
+    ):
+        """
+        Save waveform data in multiple formats.
+        Params
+        ------
+        stream: obspy.core.stream.Stream
+            The ObsPy stream to save.
+        event_dir: str
+            Directory to save the waveform data.
+        filename_prefix: str
+            Prefix for filenames.
+        formats: list
+            List of formats to save the waveform data.
+        """
+        for fmt in formats:
+            if fmt == "MSEED":
+                mseed_path = os.path.join(event_dir, f"{filename_prefix}.mseed")
+                stream.write(mseed_path, format="MSEED")
+                print(f"[{UTCDateTime.now()}] Saved MiniSEED: {mseed_path}")
+            elif fmt == "WAV":
+                wav_path = os.path.join(event_dir, f"{filename_prefix}.wav")
+                self.convert_to_wav(stream, wav_path)
+                print(f"[{UTCDateTime.now()}] Saved WAV: {wav_path}")
+            elif fmt == "PNG":
+                png_path = os.path.join(event_dir, f"{filename_prefix}.png")
+                stream.plot(outfile=png_path)
+                print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
+            else:
+                print(f"Unsupported format: {fmt}. Skipping...")
+
     def save_waveform(
         self,
         quake_id: str,
@@ -279,23 +299,8 @@ class EarthquakeMonitor:
                 endtime=endtime,
             )
 
-            # Save miniSEED
-            mseed_path = os.path.join(event_dir, f"{filename_prefix}.mseed")
-            waveform.write(mseed_path, format="MSEED")
-            print(f"[{UTCDateTime.now()}] Saved MiniSEED: {mseed_path}")
-
-            # Convert to WAV
-            wav_path = os.path.join(event_dir, f"{filename_prefix}.wav")
-            self.convert_to_wav(waveform, wav_path)
-            print(f"[{UTCDateTime.now()}] Saved WAV: {wav_path}")
-
-            # Plot and save PNG
-            png_path = os.path.join(event_dir, f"{filename_prefix}.png")
-            waveform.plot(outfile=png_path)
-            print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
-
-            # Mark this station as queried for this event
-            self.captured_stations[quake_id].add(f"{network}.{station}")
+            # Persist the waveform data
+            self.save_all_formats(waveform, event_dir, filename_prefix)
 
         except Exception as e:
             if "204" in str(e):
@@ -429,20 +434,8 @@ class DebugEarthquakeMonitor(EarthquakeMonitor):
             filename_prefix = f"{sid}"
             stream = self.generate_mock_waveform()
 
-            # Save the waveform data as MiniSEED
-            mseed_path = f"{event_dir}/{filename_prefix}.mseed"
-            stream.write(mseed_path, format="MSEED")
-            print(f"[{UTCDateTime.now()}] Saved mock MiniSEED: {mseed_path}")
-
-            # Convert to WAV
-            wav_path = os.path.join(event_dir, f"{filename_prefix}.wav")
-            self.convert_to_wav(stream, wav_path)
-            print(f"[{UTCDateTime.now()}] Saved WAV: {wav_path}")
-
-            # Plot and save PNG
-            png_path = os.path.join(event_dir, f"{filename_prefix}.png")
-            stream.plot(outfile=png_path)
-            print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
+            # Save the waveform data
+            self.save_all_formats(stream, event_dir, filename_prefix)
 
     def generate_mock_waveform(self, npts=1000, sampling_rate=100):
         """
