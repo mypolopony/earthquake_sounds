@@ -52,3 +52,13 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  producer:
+    build:
+      context: ./obspy
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: seismic-stream
+    command: [ "poetry", "run", "python", "producer.py", "--debug" ]

@@ -4,6 +4,8 @@ version = "0.5.0"
 description = "Producer for generting and parsing raw earthquake data"
 authors = ["Selwyn-Lloyd McPherson <selwyn.mcpherson@gmail.com>"]
 readme = "README.md"
+# While in development, this pyproject.toml is specific for the script (non-package)
+include = ["producer.py"]
 
 [tool.black]
 line-length = 116
