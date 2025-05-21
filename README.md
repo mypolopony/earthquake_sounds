@@ -69,6 +69,9 @@ After running the application, the system will listen to real-time seismic data 
 - **Receive real-time seismic data streamed from the separately running ObsPy microservice**.
 - Adjust parameters in `config.yaml` to modify data sources and output preferences.
 
+## Flow Diagram
+![flow_diagram](img/flow_diagram.png)
+
 ## Example Earthquakes
 
 11932886_2.0
