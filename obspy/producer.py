@@ -201,7 +201,7 @@ class EarthquakeMonitor:
         station_reports = self.poll_waveforms(quake, event_dir)
 
         # Send to Kafka
-        if self.kafka_producer and station_reports:  # Only send if there's data
+        if self.kafka_producer:
             # Prepare earthquake data, converting UTCDateTime to ISO string
             quake_data = {
                 "id": quake.id,
@@ -210,28 +210,22 @@ class EarthquakeMonitor:
                 "longitude": quake.longitude,
                 "magnitude": quake.magnitude,
             }
-            message = {"earthquake": quake_data, "station_reports": station_reports}
+            # station_reports might be empty if no stations were processed or if all S3 uploads failed,
+            # but we still send the main earthquake event.
+            message = {"earthquake": quake_data, "station_reports": station_reports if station_reports else []}
             try:
                 # Send to Kafka (non-blocking)
                 self.kafka_producer.send(self.kafka_topic, message)
-
-                # Verify the message is sent (blocking)
-                # future = self.kafka_producer.send(self.kafka_topic, message)
-                # record_metadata = future.get(timeout=10)
-                # print(f"[{UTCDateTime.now()}] Sent message to Kafka topic {record_metadata.topic} partition {record_metadata.partition} offset {record_metadata.offset}")
-                print(
-                    f"[{UTCDateTime.now()}] Sent data for earthquake {quake.id} to Kafka topic '{self.kafka_topic}'"
-                )
+                log_message = f"[{UTCDateTime.now()}] Sent data for earthquake {quake.id} to Kafka topic '{self.kafka_topic}'."
+                if not station_reports:
+                    log_message += " (No station data was included)."
+                print(log_message)
             except KafkaError as e:
                 print(f"[{UTCDateTime.now()}] Error sending message to Kafka for earthquake {quake.id}: {e}")
             except Exception as e:
                 print(
                     f"[{UTCDateTime.now()}] An unexpected error occurred sending message to Kafka for earthquake {quake.id}: {e}"
                 )
-        elif not station_reports:
-            print(
-                f"[{UTCDateTime.now()}] No station waveform data processed or uploaded for earthquake {quake.id}. Skipping Kafka message."
-            )
         else:  # Kafka producer not available
             print(
                 f"[{UTCDateTime.now()}] Kafka producer not available. Skipping Kafka message for earthquake {quake.id}."
@@ -244,7 +238,7 @@ class EarthquakeMonitor:
         max_radius: float = 1.8,
         avg_p_speed: float = 6.0,
         avg_s_speed: float = 3.5,
-    ):
+    ) -> list:
         """
         Poll stations near the earthquake epicenter for waveform data.
 
@@ -307,22 +301,22 @@ class EarthquakeMonitor:
                         event_dir,
                         filename_prefix,
                     )
-                    if s3_uris_for_station:
-                        all_station_reports.append(
-                            {
-                                "station_id": station_id,
-                                "network_code": network.code,
-                                "station_code": station.code,
-                                "latitude": station.latitude,
-                                "longitude": station.longitude,
-                                "distance_km": round(dist_km, 2),
-                                "p_arrival_time": p_arrival.isoformat(),
-                                "s_arrival_time": s_arrival.isoformat(),
-                                "waveform_start_time": start_time.isoformat(),
-                                "waveform_end_time": end_time.isoformat(),
-                                "files": s3_uris_for_station,
-                            }
-                        )
+                    # Always add station report, s3_uris_for_station might be empty if S3 failed or no waveform
+                    all_station_reports.append(
+                        {
+                            "station_id": station_id,
+                            "network_code": network.code,
+                            "station_code": station.code,
+                            "latitude": station.latitude,
+                            "longitude": station.longitude,
+                            "distance_km": round(dist_km, 2),
+                            "p_arrival_time": p_arrival.isoformat(),
+                            "s_arrival_time": s_arrival.isoformat(),
+                            "waveform_start_time": start_time.isoformat(),
+                            "waveform_end_time": end_time.isoformat(),
+                            "files": s3_uris_for_station if s3_uris_for_station else {},  # Ensure 'files' is a dict
+                        }
+                    )
                     self.captured_stations[quake.id].add(station_id)  # Mark as processed
         return all_station_reports
 
@@ -408,7 +402,7 @@ class EarthquakeMonitor:
         endtime: UTCDateTime,
         event_dir: str,  # Local directory for this event's files
         filename_prefix: str,  # Filename prefix (e.g., "dist_station")
-    ):
+    ) -> dict:
         """
         Fetch waveform data, save it in multiple formats locally, upload to S3,
         and return S3 URIs.
@@ -612,22 +606,22 @@ class DebugEarthquakeMonitor(EarthquakeMonitor):
                 quake.id,  # Pass quake.id for S3 path
                 quake.magnitude,  # Pass quake.magnitude for S3 path
             )
-            if s3_uris_for_station:
-                all_station_reports.append(
-                    {
-                        "station_id": sid,
-                        "network_code": sid.split(".")[0] if "." in sid else "XX",
-                        "station_code": sid.split(".")[1] if "." in sid else "MOCK",
-                        "latitude": round(random.uniform(-90, 90), 4),  # Mock data
-                        "longitude": round(random.uniform(-180, 180), 4),  # Mock data
-                        "distance_km": round(random.uniform(10, 100), 2),
-                        "p_arrival_time": (quake.time + random.randint(10, 60)).isoformat(),  # Mock data
-                        "s_arrival_time": (quake.time + random.randint(70, 180)).isoformat(),  # Mock data
-                        "waveform_start_time": (quake.time - 30).isoformat(),  # Mock data
-                        "waveform_end_time": (quake.time + 300).isoformat(),  # Mock data
-                        "files": s3_uris_for_station,
-                    }
-                )
+            # Always add station report, s3_uris_for_station might be empty if S3 failed or no waveform
+            all_station_reports.append(
+                {
+                    "station_id": sid,
+                    "network_code": sid.split(".")[0] if "." in sid else "XX",
+                    "station_code": sid.split(".")[1] if "." in sid else "MOCK",
+                    "latitude": round(random.uniform(-90, 90), 4),  # Mock data
+                    "longitude": round(random.uniform(-180, 180), 4),  # Mock data
+                    "distance_km": round(random.uniform(10, 100), 2),
+                    "p_arrival_time": (quake.time + random.randint(10, 60)).isoformat(),  # Mock data
+                    "s_arrival_time": (quake.time + random.randint(70, 180)).isoformat(),  # Mock data
+                    "waveform_start_time": (quake.time - 30).isoformat(),  # Mock data
+                    "waveform_end_time": (quake.time + 300).isoformat(),  # Mock data
+                    "files": s3_uris_for_station if s3_uris_for_station else {},  # Ensure 'files' is a dict
+                }
+            )
         return all_station_reports  # Return aggregated S3 URIs/reports
 
     def generate_mock_waveform(self, npts=1000, sampling_rate=100):
