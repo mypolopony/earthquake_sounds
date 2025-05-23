@@ -1,4 +1,4 @@
-# Stage 1: Build environment
+# ===== Stage 1: Build environment =====
 FROM python:3.11-slim as builder
 
 # Install Poetry
@@ -19,7 +19,7 @@ RUN poetry config virtualenvs.in-project true \
 # Copy the rest of the application code
 COPY . /app
 
-# Stage 2: Runtime environment
+# ===== Stage 2: Minimal runtime =====
 FROM python:3.11-slim
 
 # Set work directory

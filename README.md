@@ -42,8 +42,7 @@ Ensure you have the following installed:
 ### Running ObsPy Microservice
 ObsPy must be run separately from the main application. To start the ObsPy microservice:
 ```sh
-cd obspy
-poetry run python run_obspy.py
+poetry run obspy/producer.py
 ```
 This will launch the service responsible for handling and streaming real-time seismic data.
 
@@ -69,6 +68,9 @@ After running the application, the system will listen to real-time seismic data 
 - Access the Flask-based web interface for earthquake reports and visualization.
 - **Receive real-time seismic data streamed from the separately running ObsPy microservice**.
 - Adjust parameters in `config.yaml` to modify data sources and output preferences.
+
+## Flow Diagram
+![flow_diagram](img/flow_diagram.png)
 
 ## Example Earthquakes
 

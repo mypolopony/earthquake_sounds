@@ -27,7 +27,6 @@ ignore = ["E501"]  # Ignore line length if using Black
 
 # Format imports
 required-version = "0.9.1"
-line-length = 88  # Match Black's default line length
 
 [build-system]
 requires = ["poetry-core"]
