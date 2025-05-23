@@ -30,7 +30,7 @@ The system is composed of several interconnected microservices and cloud compone
 6.  **Web Application (`web_app` service):** A Flask application that provides a backend API to query Snowflake and a frontend to display earthquake data and visualizations.
 7.  **Supporting Services:** Zookeeper (for Kafka), Kafka UI (for topic management).
 
-![architecture](img/flow_diagram.png))
+![architecture](img/flow_diagram.png)
 
 ## Prerequisites
 
