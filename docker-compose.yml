@@ -65,4 +65,4 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-    command: [ "poetry", "run", "python", "producer.py", "--debug" ]
+    command: [ "python", "producer.py", "--debug" ]
