@@ -4,7 +4,13 @@ import numpy as np
 import argparse
 import time
 import sys
+import json
 from dataclasses import dataclass
+
+import boto3
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
 
 from obspy import Trace, UTCDateTime
 from obspy.clients.fdsn import Client
@@ -62,6 +68,67 @@ class EarthquakeMonitor:
         os.makedirs(self.base_dir, exist_ok=True)
         self.captured_stations = {}
 
+        # S3 Configuration
+        self.s3_bucket_name = os.getenv("S3_BUCKET_NAME")
+        self.aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+        self.aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        self.aws_region_name = os.getenv("AWS_DEFAULT_REGION")
+        self.s3_client = None
+
+        # Check S3 credentials and bucket name
+        if not self.s3_bucket_name:
+            print(f"[{UTCDateTime.now()}] Warning: S3_BUCKET_NAME not set. S3 uploads will be skipped.")
+        elif not self.aws_access_key_id or not self.aws_secret_access_key:
+            print(
+                f"[{UTCDateTime.now()}] Warning: AWS credentials (ID or Key) not fully set. S3 uploads will be skipped."
+            )
+        else:
+            # Initialize S3 client
+            try:
+                self.s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=self.aws_access_key_id,
+                    aws_secret_access_key=self.aws_secret_access_key,
+                    region_name=self.aws_region_name,
+                )
+                print(f"[{UTCDateTime.now()}] S3 client initialized for bucket: {self.s3_bucket_name}")
+            except (NoCredentialsError, PartialCredentialsError):
+                print(
+                    f"[{UTCDateTime.now()}] Error: AWS credentials not found or incomplete. S3 uploads will fail."
+                )
+                self.s3_client = None
+            except ClientError as e:
+                print(f"[{UTCDateTime.now()}] Error initializing S3 client: {e}. S3 uploads will fail.")
+                self.s3_client = None
+            except Exception as e:
+                print(
+                    f"[{UTCDateTime.now()}] An unexpected error occurred initializing S3 client: {e}. S3 uploads will fail."
+                )
+                self.s3_client = None
+
+        # Kafka Configuration
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+        self.kafka_topic = os.getenv("KAFKA_TOPIC", "seismic-stream")
+        self.kafka_producer = None
+        try:
+            self.kafka_producer = KafkaProducer(
+                bootstrap_servers=self.kafka_bootstrap_servers.split(","),
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                retries=5,
+                acks="all",
+            )
+            print(
+                f"[{UTCDateTime.now()}] Kafka producer initialized for topic '{self.kafka_topic}' at {self.kafka_bootstrap_servers}"
+            )
+        except KafkaError as e:
+            print(f"[{UTCDateTime.now()}] Error initializing Kafka producer: {e}. Messages will not be sent.")
+            self.kafka_producer = None
+        except Exception as e:  # Catch any other unexpected errors during Kafka init
+            print(
+                f"[{UTCDateTime.now()}] An unexpected error occurred initializing Kafka producer: {e}. Messages will not be sent."
+            )
+            self.kafka_producer = None
+
     def poll_earthquakes(self, min_magnitude=1.0, poll_interval=60, lookback_interval=1000):
         """
         Continuously poll for new earthquakes and process them.
@@ -86,6 +153,7 @@ class EarthquakeMonitor:
                     orderby="time",
                 )
 
+                # Process each event
                 for event in events:
                     self.process_earthquake(event)
 
@@ -129,8 +197,43 @@ class EarthquakeMonitor:
         if quake.id not in self.captured_stations:
             self.captured_stations[quake.id] = set()
 
-        # Poll waveforms
-        self.poll_waveforms(quake, event_dir)
+        # Poll waveforms and get S3 URIs for all stations
+        station_reports = self.poll_waveforms(quake, event_dir)
+
+        # Send to Kafka
+        if self.kafka_producer and station_reports:  # Only send if there's data
+            # Prepare earthquake data, converting UTCDateTime to ISO string
+            quake_data = {
+                "id": quake.id,
+                "time": quake.time.isoformat(),
+                "latitude": quake.latitude,
+                "longitude": quake.longitude,
+                "magnitude": quake.magnitude,
+            }
+            message = {"earthquake": quake_data, "station_reports": station_reports}
+            try:
+                self.kafka_producer.send(self.kafka_topic, message)
+                # Verify the message is sent (blocking)
+                # future = self.kafka_producer.send(self.kafka_topic, message)
+                # record_metadata = future.get(timeout=10)
+                # print(f"[{UTCDateTime.now()}] Sent message to Kafka topic {record_metadata.topic} partition {record_metadata.partition} offset {record_metadata.offset}")
+                print(
+                    f"[{UTCDateTime.now()}] Sent data for earthquake {quake.id} to Kafka topic '{self.kafka_topic}'"
+                )
+            except KafkaError as e:
+                print(f"[{UTCDateTime.now()}] Error sending message to Kafka for earthquake {quake.id}: {e}")
+            except Exception as e:
+                print(
+                    f"[{UTCDateTime.now()}] An unexpected error occurred sending message to Kafka for earthquake {quake.id}: {e}"
+                )
+        elif not station_reports:
+            print(
+                f"[{UTCDateTime.now()}] No station waveform data processed or uploaded for earthquake {quake.id}. Skipping Kafka message."
+            )
+        else:  # Kafka producer not available
+            print(
+                f"[{UTCDateTime.now()}] Kafka producer not available. Skipping Kafka message for earthquake {quake.id}."
+            )
 
     def poll_waveforms(
         self,
@@ -171,16 +274,14 @@ class EarthquakeMonitor:
             return
 
         # Iterate over all stations / networks
+        all_station_reports = []
         for network in stations:
             for station in network:
                 station_id = f"{network.code}.{station.code}"
                 if station_id not in self.captured_stations[quake.id]:
                     # Distance to station
                     dist_m, _, _ = gps2dist_azimuth(
-                        quake.latitude,
-                        quake.longitude,
-                        station.latitude,
-                        station.longitude,
+                        quake.latitude, quake.longitude, station.latitude, station.longitude
                     )
                     dist_km = dist_m / 1000.0
 
@@ -191,82 +292,129 @@ class EarthquakeMonitor:
                     # Define time window for waveform data
                     start_time = p_arrival - 180
                     end_time = s_arrival + 240
-
-                    # Announce
-                    # print(
-                    #    f"[{UTCDateTime.now()}] Station: {station_id}, Distance: {dist_km:.2f} km, "
-                    #    f"P arrival: {p_arrival}, S arrival: {s_arrival}"
-                    # )
-
-                    # Save waveform data
                     filename_prefix = f"{dist_km:.2f}_{station_id}"
-                    self.save_waveform(
-                        quake.id,
+
+                    s3_uris_for_station = self.save_waveform(
+                        quake,  # Pass the full Earthquake object
                         network.code,
                         station.code,
-                        "*",
-                        "BHZ",
+                        "*",  # location
+                        "BHZ",  # channel
                         start_time,
                         end_time,
                         event_dir,
                         filename_prefix,
                     )
+                    if s3_uris_for_station:
+                        all_station_reports.append(
+                            {
+                                "station_id": station_id,
+                                "network_code": network.code,
+                                "station_code": station.code,
+                                "latitude": station.latitude,
+                                "longitude": station.longitude,
+                                "distance_km": round(dist_km, 2),
+                                "p_arrival_time": p_arrival.isoformat(),
+                                "s_arrival_time": s_arrival.isoformat(),
+                                "waveform_start_time": start_time.isoformat(),
+                                "waveform_end_time": end_time.isoformat(),
+                                "files": s3_uris_for_station,
+                            }
+                        )
+                    self.captured_stations[quake.id].add(station_id)  # Mark as processed
+        return all_station_reports
 
     def save_all_formats(
         self,
         stream: Stream,
-        event_dir: str,
-        filename_prefix: str,
+        event_dir: str,  # Local event directory path
+        filename_prefix: str,  # Filename prefix (e.g., "dist_station")
+        quake_id: str,  # For S3 path
+        quake_magnitude: float,  # For S3 path
         formats: list = ["MSEED", "WAV", "PNG"],
     ):
         """
-        Save waveform data in multiple formats.
-        Params
-        ------
-        stream: obspy.core.stream.Stream
-            The ObsPy stream to save.
-        event_dir: str
-            Directory to save the waveform data.
-        filename_prefix: str
-            Prefix for filenames.
-        formats: list
-            List of formats to save the waveform data.
+        Save waveform data in multiple formats locally and upload to S3.
+        Returns a dictionary of S3 URIs for uploaded files.
         """
-        for fmt in formats:
-            if fmt == "MSEED":
-                mseed_path = os.path.join(event_dir, f"{filename_prefix}.mseed")
-                stream.write(mseed_path, format="MSEED")
-                print(f"[{UTCDateTime.now()}] Saved MiniSEED: {mseed_path}")
-            elif fmt == "WAV":
-                wav_path = os.path.join(event_dir, f"{filename_prefix}.wav")
-                self.convert_to_wav(stream, wav_path)
-                print(f"[{UTCDateTime.now()}] Saved WAV: {wav_path}")
-            elif fmt == "PNG":
-                png_path = os.path.join(event_dir, f"{filename_prefix}.png")
-                stream.plot(outfile=png_path)
-                print(f"[{UTCDateTime.now()}] Saved PNG: {png_path}")
-            else:
-                print(f"Unsupported format: {fmt}. Skipping...")
+        s3_uris = {}
+        if not stream:
+            print(f"[{UTCDateTime.now()}] No stream data to save for {filename_prefix}.")
+            return s3_uris
+
+        for fmt_upper in formats:
+            fmt = fmt_upper.lower()  # Use lowercase for extensions
+            local_path = os.path.join(event_dir, f"{filename_prefix}.{fmt}")
+
+            try:
+                if fmt_upper == "MSEED":
+                    stream.write(local_path, format="MSEED")
+                    print(f"[{UTCDateTime.now()}] Saved MiniSEED locally: {local_path}")
+                elif fmt_upper == "WAV":
+                    self.convert_to_wav(stream, local_path)
+                    print(f"[{UTCDateTime.now()}] Saved WAV locally: {local_path}")
+                elif fmt_upper == "PNG":
+                    # Ensure stream is not empty for plotting
+                    if stream:
+                        stream.plot(outfile=local_path, show=False)  # show=False to prevent GUI
+                        print(f"[{UTCDateTime.now()}] Saved PNG locally: {local_path}")
+                    else:
+                        print(f"[{UTCDateTime.now()}] Empty stream, skipping PNG for {filename_prefix}")
+                        continue  # Skip S3 upload for this format
+                else:
+                    print(f"[{UTCDateTime.now()}] Unsupported format: {fmt_upper}. Skipping...")
+                    continue
+
+                # Upload to S3
+                if self.s3_client and self.s3_bucket_name:
+                    # S3 key structure: earthquakes/<quake_id>_<magnitude>/<filename_prefix>.<format_extension>
+                    s3_key = f"earthquakes/{quake_id}_{quake_magnitude}/{filename_prefix}.{fmt}"
+                    try:
+                        self.s3_client.upload_file(local_path, self.s3_bucket_name, s3_key)
+                        s3_uri = f"s3://{self.s3_bucket_name}/{s3_key}"
+                        s3_uris[fmt] = s3_uri
+                        print(f"[{UTCDateTime.now()}] Uploaded {fmt_upper} to S3: {s3_uri}")
+                        # Optionally, remove local file after upload
+                        # os.remove(local_path)
+                        # print(f"[{UTCDateTime.now()}] Removed local file: {local_path}")
+                    except FileNotFoundError:
+                        print(f"[{UTCDateTime.now()}] Error: Local file not found for S3 upload: {local_path}")
+                    except ClientError as e:
+                        print(f"[{UTCDateTime.now()}] Error uploading {fmt_upper} to S3 ({s3_key}): {e}")
+                    except Exception as e:
+                        print(
+                            f"[{UTCDateTime.now()}] An unexpected error occurred during S3 upload of {fmt_upper} ({s3_key}): {e}"
+                        )
+                else:
+                    print(f"[{UTCDateTime.now()}] S3 client not configured. Skipping S3 upload for {fmt_upper}.")
+
+            except Exception as e:
+                print(
+                    f"[{UTCDateTime.now()}] Error processing/saving format {fmt_upper} for {filename_prefix}: {e}"
+                )
+
+        return s3_uris
 
     def save_waveform(
         self,
-        quake_id: str,
+        quake: Earthquake,  # Changed from quake_id to full Earthquake object
         network: str,
         station: str,
         location: str,
         channel: str,
         starttime: UTCDateTime,
         endtime: UTCDateTime,
-        event_dir: str,
-        filename_prefix: str,
+        event_dir: str,  # Local directory for this event's files
+        filename_prefix: str,  # Filename prefix (e.g., "dist_station")
     ):
         """
-        Save waveform data as MiniSEED, WAV, and PNG files.
+        Fetch waveform data, save it in multiple formats locally, upload to S3,
+        and return S3 URIs.
 
         Params
         ------
-        quake_id: str
-            The earthquake ID.
+        quake: Earthquake
+            The earthquake event object.
         network: str
             Network code.
         station: str
@@ -280,12 +428,17 @@ class EarthquakeMonitor:
         endtime: obspy.UTCDateTime
             End time for the waveform data.
         event_dir: str
-            Directory to save the waveform data.
+            Directory to save the waveform data locally.
         filename_prefix: str
-            Prefix for filenames.
+            Prefix for local filenames and part of S3 key.
+
+        Returns
+        -------
+        dict
+            A dictionary of S3 URIs for the uploaded files, or empty if fails.
         """
+        s3_uris = {}
         try:
-            # Fetch waveform data
             waveform = self.client.get_waveforms(
                 network=network,
                 station=station,
@@ -295,14 +448,32 @@ class EarthquakeMonitor:
                 endtime=endtime,
             )
 
-            # Persist the waveform data
-            self.save_all_formats(waveform, event_dir, filename_prefix)
+            if not waveform or len(waveform) == 0:
+                print(
+                    f"[{UTCDateTime.now()}] No waveform data returned for {network}.{station} {channel} at {starttime}"
+                )
+                return s3_uris  # Return empty dict
 
-        except Exception as e:
-            if "204" in str(e):
-                pass
+            # Persist the waveform data locally and upload to S3
+            s3_uris = self.save_all_formats(
+                waveform,
+                event_dir,
+                filename_prefix,
+                quake.id,  # Pass quake.id for S3 path
+                quake.magnitude,  # Pass quake.magnitude for S3 path
+            )
+
+        except FDSNException as e:
+            if "No data available" in str(e) or "204" in str(e):  # No content
+                print(f"[{UTCDateTime.now()}] No data available for {network}.{station} {channel} via FDSN: {e}")
             else:
-                print(f"An unexpected error occurred: {e}")
+                print(f"[{UTCDateTime.now()}] FDSNException for {network}.{station}: {e}")
+        except Exception as e:
+            print(
+                f"[{UTCDateTime.now()}] An unexpected error occurred in save_waveform for {network}.{station}: {e}"
+            )
+
+        return s3_uris
 
     def convert_to_wav(
         self,
@@ -424,14 +595,38 @@ class DebugEarthquakeMonitor(EarthquakeMonitor):
         event_dir: str
             Directory to save the simulated waveform data.
         """
-        station_ids = ["XX.TEST", "YY.DEBUG"]
+        station_ids = ["XX.TEST1", "YY.DEBUG2"]  # Made them slightly more unique
+        all_station_reports = []
         for sid in station_ids:
-            net, sta = sid.split(".")
-            filename_prefix = f"{sid}"
+            # For debug, filename_prefix can be simpler, e.g., just station ID
+            filename_prefix = f"debug_{sid}"
             stream = self.generate_mock_waveform()
 
-            # Save the waveform data
-            self.save_all_formats(stream, event_dir, filename_prefix)
+            # Save the waveform data locally and attempt S3 upload
+            s3_uris_for_station = self.save_all_formats(
+                stream,
+                event_dir,
+                filename_prefix,
+                quake.id,  # Pass quake.id for S3 path
+                quake.magnitude,  # Pass quake.magnitude for S3 path
+            )
+            if s3_uris_for_station:
+                all_station_reports.append(
+                    {
+                        "station_id": sid,
+                        "network_code": sid.split(".")[0] if "." in sid else "XX",
+                        "station_code": sid.split(".")[1] if "." in sid else "MOCK",
+                        "latitude": round(random.uniform(-90, 90), 4),  # Mock data
+                        "longitude": round(random.uniform(-180, 180), 4),  # Mock data
+                        "distance_km": round(random.uniform(10, 100), 2),
+                        "p_arrival_time": (quake.time + random.randint(10, 60)).isoformat(),  # Mock data
+                        "s_arrival_time": (quake.time + random.randint(70, 180)).isoformat(),  # Mock data
+                        "waveform_start_time": (quake.time - 30).isoformat(),  # Mock data
+                        "waveform_end_time": (quake.time + 300).isoformat(),  # Mock data
+                        "files": s3_uris_for_station,
+                    }
+                )
+        return all_station_reports  # Return aggregated S3 URIs/reports
 
     def generate_mock_waveform(self, npts=1000, sampling_rate=100):
         """
