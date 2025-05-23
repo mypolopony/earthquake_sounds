@@ -61,4 +61,8 @@ services:
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       KAFKA_TOPIC: seismic-stream
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
     command: [ "poetry", "run", "python", "producer.py", "--debug" ]
