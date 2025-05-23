@@ -12,10 +12,6 @@ The module is centered around two primary classes:
 * **`DebugEarthquakeMonitor`**
   Inherits from `EarthquakeMonitor` and generates synthetic earthquake events and waveforms. This mode is useful for development and debugging without needing real seismic activity or network access.
 
-## Architecture
-
-![architecture](img/flow_diagram.png))
-
 ## Key Features
 
 ### Earthquake Detection & Processing

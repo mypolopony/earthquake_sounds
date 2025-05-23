@@ -30,7 +30,7 @@ The system is composed of several interconnected microservices and cloud compone
 6.  **Web Application (`web_app` service):** A Flask application that provides a backend API to query Snowflake and a frontend to display earthquake data and visualizations.
 7.  **Supporting Services:** Zookeeper (for Kafka), Kafka UI (for topic management).
 
-For a detailed architectural diagram and plan, please refer to [`ARCHITECTURE_PLAN.md`](ARCHITECTURE_PLAN.md).
+![architecture](img/flow_diagram.png))
 
 ## Prerequisites
 
@@ -39,6 +39,10 @@ Ensure you have the following installed:
 -   Docker and Docker Compose
 -   Terraform (for managing cloud infrastructure related to Snowflake, if applicable)
 -   AWS Account and configured AWS CLI (if managing S3 or other AWS resources manually, though the application uses credentials via environment variables).
+
+## Earthquake Monitoring
+
+Refer to `obspy/README.md` for a more detailed description
 
 ## Getting Started
 
