@@ -60,9 +60,9 @@ services:
       - kafka
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_TOPIC: seismic-stream
+      KAFKA_TOPIC: ${S3_BUCKET_NAME}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
-    command: [ "python", "producer.py", "--debug" ]
+    command: [ "python", "producer.py", "--debug", "--max-events", "100" ]

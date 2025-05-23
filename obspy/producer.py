@@ -108,7 +108,7 @@ class EarthquakeMonitor:
 
         # Kafka Configuration
         self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
-        self.kafka_topic = os.getenv("KAFKA_TOPIC", "seismic-stream")
+        self.kafka_topic = os.getenv("KAFKA_TOPIC")
         self.kafka_producer = None
         try:
             self.kafka_producer = KafkaProducer(
