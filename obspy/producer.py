@@ -212,7 +212,9 @@ class EarthquakeMonitor:
             }
             message = {"earthquake": quake_data, "station_reports": station_reports}
             try:
+                # Send to Kafka (non-blocking)
                 self.kafka_producer.send(self.kafka_topic, message)
+
                 # Verify the message is sent (blocking)
                 # future = self.kafka_producer.send(self.kafka_topic, message)
                 # record_metadata = future.get(timeout=10)
